@@ -11,3 +11,7 @@ class Principal(db.Model):
 
     def __repr__(self):
         return '<Principal %r>' % self.id
+    
+    @classmethod
+    def get_by_id(cls, _id, user_id=None):
+        return cls.query.filter(cls.id == _id and cls.user_id == user_id).first()
