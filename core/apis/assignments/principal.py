@@ -1,4 +1,5 @@
-from flask import Blueprint
+from flask import Blueprint, abort
+import enum
 from core import db
 from core.apis import decorators
 from core.apis.responses import APIResponse
@@ -9,7 +10,10 @@ from core.models.teachers import Teacher  # Assuming you have a Teacher model
 from .schema import AssignmentSchema, TeacherSchema  # Assuming you have schemas for Assignment and Teacher
 from core.models.users import User
 principal_assignments_resources = Blueprint('principal_assignments_resources', __name__)
-
+class AssignmentStateEnum(str, enum.Enum):
+    DRAFT = 'DRAFT'
+    SUBMITTED = 'SUBMITTED'
+    GRADED = 'GRADED'
 
 @principal_assignments_resources.route('/assignments', methods=['GET'], strict_slashes=False)
 @decorators.authenticate_principal
@@ -30,23 +34,28 @@ def list_teachers(p):
     return APIResponse.respond(data=teachers_dump)
 
 
-# @principal_assignments_resources.route('/assignments/grade', methods=['POST'], strict_slashes=False)
-# @decorators.accept_payload
-# @decorators.authenticate_principal
-# def grade_assignment(p, incoming_payload):
-#     """Grade or re-grade an assignment"""
-#     assignment_id = incoming_payload.get('assignment_id')
-#     grade = incoming_payload.get('grade')
+@principal_assignments_resources.route('/assignments/grade', methods=['POST'], strict_slashes=False)
+@decorators.accept_payload
+@decorators.authenticate_principal
+def grade_assignment(p, incoming_payload):
+    """Grade or re-grade an assignment"""
+    assignment_id = incoming_payload.get('id')
+    grade = incoming_payload.get('grade')
 
-#     if not assignment_id or not grade:
-#         return APIResponse.respond(message="Assignment ID and grade are required.", status=400)
+    if not assignment_id or not grade:
+        return APIResponse.respond(data="Assignment ID and grade are required.", status=400)
 
-#     assignment = Assignment.query.get(assignment_id)
-#     if not assignment:
-#         return APIResponse.respond(message="Assignment not found.", status=404)
+    assignment = Assignment.query.get(assignment_id)
+    if not assignment:
+        return APIResponse.respond(data="Assignment not found.", status=404)
 
-#     assignment.grade = grade
-#     db.session.commit()
+    if assignment.state == AssignmentStateEnum.DRAFT:
+        abort(400, "Assignment is in draft state.")
+    if assignment.state == AssignmentStateEnum.SUBMITTED:
+        assignment.state = AssignmentStateEnum.GRADED
+    
+    assignment.grade = grade
+    db.session.commit()
 
-#     graded_assignment_dump = AssignmentSchema().dump(assignment)
-#     return APIResponse.respond(data=graded_assignment_dump)
+    graded_assignment_dump = AssignmentSchema().dump(assignment)
+    return APIResponse.respond(data=graded_assignment_dump)
